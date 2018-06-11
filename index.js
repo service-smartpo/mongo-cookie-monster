@@ -25,15 +25,20 @@ var CookieMonster = function(opts, id) {
 }
 
 module.exports = function(opts) {
-    if (!opts || typeof(opts) != 'object' ||
-        !('connection' in opts) ||
-        !('collection' in opts) ||
-        !('queryColumn' in opts)
-    ) {
-        throw new Error('Please pass the credentials for mongo');
+    var repo;
+    if(opts && 'queryColumn' in opts && 'repo' in opts){
+        repo = opts.repo;
+    } else {
+        if (!opts || typeof(opts) != 'object' ||
+            !('connection' in opts) ||
+            !('collection' in opts) ||
+            !('queryColumn' in opts)
+        ) {
+            throw new Error('Please pass the credentials for mongo');
+        }
+        repo = mongojs(opts.connection).collection(opts.collection);
     }
-
-    var repo = mongojs(opts.connection).collection(opts.collection);
+    
     return CookieMonster.bind(this, {
         repo: repo,
         queryColumn: opts.queryColumn
