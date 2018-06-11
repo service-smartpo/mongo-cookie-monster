@@ -158,8 +158,7 @@ CookieMonster.prototype._saveToRepository = function(id, data, cb) {
         '$set': { cookie: dataJson }
     }, {
         upsert: true
-    });
-    cb();
+    }, cb);
 };
 CookieMonster.prototype._loadFromRepository = function(id, cb) {
     var query = {};
