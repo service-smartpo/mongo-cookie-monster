@@ -1,6 +1,5 @@
 var tough = require('tough-cookie');
 var mongojs = require('mongojs');
-var deasync = require('deasync');
 var util = require('util');
 
 var Store = tough.Store;
@@ -15,12 +14,16 @@ var CookieMonster = function(opts, id) {
 
     this.idx = {}; // idx is memory cache
     this.initialized = false;
-    this._loadFromRepository(this.id, function(dataJson) {
-        if (dataJson) this.idx = dataJson;
-        this.initialized = true;
-    }.bind(this));
-    while (!this.initialized) {
-        deasync.runLoopOnce();
+    if (!opts.async) {
+        this._loadFromRepository(this.id, function(error, dataJson) {
+            if (error) throw error;
+            if (dataJson) this.idx = dataJson;
+            this.initialized = true;
+        }.bind(this));
+        var deasync = require('deasync');
+        while (!this.initialized) {
+            deasync.runLoopOnce();
+        }
     }
 }
 
@@ -41,13 +44,27 @@ module.exports = function(opts) {
     
     return CookieMonster.bind(this, {
         repo: repo,
-        queryColumn: opts.queryColumn
+        queryColumn: opts.queryColumn,
+        async: opts.async
     });
 }
 
 util.inherits(CookieMonster, Store);
 CookieMonster.prototype.idx = null;
 CookieMonster.prototype.synchronous = true;
+
+CookieMonster.prototype.loadAsync = function() {
+    return new Promise((resolve, reject) => {
+        if (this.initialized) return resolve();
+        this._loadFromRepository(this.id, function(error, dataJson) {
+            if (error) return reject(error);
+            if (dataJson) this.idx = dataJson;
+            this.initialized = true;
+            resolve();
+        }.bind(this));
+    });
+};
+
 // force a default depth:
 CookieMonster.prototype.inspect = function() {
     return "{ idx: " + util.inspect(this.idx, false, 2) + ' }';
@@ -167,15 +184,18 @@ CookieMonster.prototype._loadFromRepository = function(id, cb) {
         cookie: 1,
         _id: 0
     }, function(err, docs) {
-        if (err) throw (err);
-        var dataJson = docs && docs.cookie ? JSON.parse(docs.cookie) : null;
-        for (var domainName in dataJson) {
-            for (var pathName in dataJson[domainName]) {
-                for (var cookieName in dataJson[domainName][pathName]) {
-                    dataJson[domainName][pathName][cookieName] = tough.fromJSON(JSON.stringify(dataJson[domainName][pathName][cookieName]));
+        if (err) {
+            cb(err, null);
+        } else {
+            var dataJson = docs && docs.cookie ? JSON.parse(docs.cookie) : null;
+            for (var domainName in dataJson) {
+                for (var pathName in dataJson[domainName]) {
+                    for (var cookieName in dataJson[domainName][pathName]) {
+                        dataJson[domainName][pathName][cookieName] = tough.fromJSON(JSON.stringify(dataJson[domainName][pathName][cookieName]));
+                    }
                 }
             }
+            cb(null, dataJson);
         }
-        cb(dataJson);
     });
 };
